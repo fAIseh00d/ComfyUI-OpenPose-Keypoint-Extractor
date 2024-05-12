@@ -38,6 +38,8 @@ class OpenPoseKeyPointExtractor:
         max_x=max(round(max_x/DIV+0.5)*DIV, 64)
         max_y=max(round(max_y/DIV+0.5)*DIV, 64)
         
+        max_x=min(max_x, i_width)
+        max_y=min(max_y, i_height)
         min_x=min(i_width-(max_x - min_x), min_x)
         min_y=min(i_height-(max_y - min_y), min_y)
         return [int(min_x), int(min_y), int(max_x), int(max_y)]
@@ -83,12 +85,15 @@ class OpenPoseKeyPointExtractor:
             max_x*=canvas_width
             max_y*=canvas_height
         
-        min_x = max(min_x - dilate, 0)
-        min_y = max(min_y - dilate, 0)
-        max_x = min(max_x + dilate, canvas_width)
-        max_y = min(max_y + dilate, canvas_height)
-        
-        min_x, min_y, max_x, max_y = self.round_resolution(min_x, min_y, max_x, max_y, canvas_width, canvas_height, round_by)
+        min_x, min_y, max_x, max_y = self.round_resolution(
+            min_x - dilate,
+            min_y - dilate,
+            max_x + dilate,
+            max_y + dilate,
+            canvas_width,
+            canvas_height,
+            round_by,
+        )
         
         width : int = max_x - min_x
         height : int = max_y - min_y
@@ -108,7 +113,8 @@ class OpenPoseSEGSExtractor(OpenPoseKeyPointExtractor):
                 "select_parts": (openpose_parts, { "default": openpose_parts[0]}),
                 "points_list": ("STRING", {"multiline": True, "default": ""}),
                 "round_by": (round_divs, { "default": round_divs[0] }),
-                "dilate": ("INT", { "min": 0, "max": 128 }, { "default": 0 }),
+                "dilate_bbox": ("INT", { "min": 0, "max": 128 }, { "default": 0 }),
+                "dilate_crop": ("INT", { "min": 0, "max": 128 }, { "default": 0 }),
                 "person_number": ("INT", { "default": 0 }),
             }
         }
@@ -118,7 +124,7 @@ class OpenPoseSEGSExtractor(OpenPoseKeyPointExtractor):
     FUNCTION = "extract_SEGS"
     CATEGORY = "utils"
     
-    def extract_SEGS(self, image, pose_keypoint, select_parts, points_list, round_by, dilate, person_number):
+    def extract_SEGS(self, image, pose_keypoint, select_parts, points_list, round_by, dilate_bbox, dilate_crop, person_number):
         
         image_width = image.shape[2]
         image_height = image.shape[1]
@@ -126,12 +132,20 @@ class OpenPoseSEGSExtractor(OpenPoseKeyPointExtractor):
         control_net_wrapper=None
         label="openpose"
         
-        kps = self.box_keypoints(pose_keypoint, select_parts, points_list, 1, dilate, person_number)
+        kps = self.box_keypoints(pose_keypoint, select_parts, points_list, 1, dilate_bbox, person_number)
         bbox_region = list(kps[:4])
-        crop_region=self.round_resolution(bbox_region[0], bbox_region[1], bbox_region[2], bbox_region[3], image_width, image_height, round_by)
+        crop_region = self.round_resolution(
+            bbox_region[0] - dilate_crop,
+            bbox_region[1] - dilate_crop,
+            bbox_region[2] + dilate_crop,
+            bbox_region[3] + dilate_crop,
+            image_width,
+            image_height,
+            round_by,
+        )
         
         crop_l, crop_t, crop_r, crop_b = crop_region[:4]
-        left, top, right, bottom = bbox_region[:4]
+        left, top, right, bottom = bbox_region
         
         mask = kps[-1]
         mask[:, top:bottom, left:right] = 1.0
