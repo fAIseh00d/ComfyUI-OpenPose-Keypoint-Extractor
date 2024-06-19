@@ -175,7 +175,9 @@ class OpenPoseJsonLoader:
             },
             "optional": {
                 "JSON": ("JSON", {"default": None, "forceInput": True}),
-                "POSE_KEYPOINT": ("POSE_KEYPOINT", {"default": None, "forceInput": True})
+                "POSE_KEYPOINT": ("POSE_KEYPOINT", {"default": None, "forceInput": True}),
+                "width": ("INT", {"default": None, "forceInput": True}),
+                "height": ("INT", {"default": None, "forceInput": True}),
             }
         }
 
@@ -183,7 +185,8 @@ class OpenPoseJsonLoader:
     FUNCTION = "main"
     CATEGORY = "utils"
     
-    def json_convertor(self, pose_keypoint, points_we_want):
+    @staticmethod
+    def json_convertor(pose_keypoint, points_we_want):
         from .open_pose import PoseResult
         from .open_pose.body import BodyResult, Keypoint
         
@@ -208,8 +211,26 @@ class OpenPoseJsonLoader:
         
         return result
         
+    @staticmethod
+    def scale_pose(pose_json, width, height):
+        orig_width = pose_json['canvas_width']
+        orig_height = pose_json['canvas_height']
+        
+        scale_w = width/orig_width
+        scale_h = height/orig_height
+        
+        for person in pose_json['people']:
+            for _, kps_list in person.items():
+                for element in range(0, len(kps_list)//3):
+                    kps_list[element*3+0] *= scale_w
+                    kps_list[element*3+1] *= scale_h
 
-    def main(self, pose_json_file, points_list, JSON=None, POSE_KEYPOINT=None):
+        pose_json['canvas_width'] = width
+        pose_json['canvas_height'] = height
+        
+        return pose_json
+
+    def main(self, pose_json_file, points_list, JSON=None, POSE_KEYPOINT=None, width=None, height=None):
         from .open_pose import draw_poses
         points_we_want = [int(element) for element in points_list.split(",")]
 
@@ -223,10 +244,16 @@ class OpenPoseJsonLoader:
             with open(pose_json_file, "r") as f:
                 pose_json = json.loads(f.read().strip('\n[]').replace("'", '"'))
 
+        if width is None and height is None:
+            width = pose_json['canvas_width']
+            height = pose_json['canvas_height']
+
         poses = [self.json_convertor(pose_json, points_we_want)]
 
-        canvas = draw_poses(poses, pose_json['canvas_height'], pose_json['canvas_width'], draw_body=True, draw_hand=False, draw_face=False) 
+        canvas = draw_poses(poses, height, width, draw_body=True, draw_hand=False, draw_face=False) 
         canvas = torch.from_numpy(canvas.astype(np.float32)/255.0)[None,]
+        
+        pose_json = self.scale_pose(pose_json, width, height)
         
         return canvas, [pose_json]
 
