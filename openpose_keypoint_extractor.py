@@ -24,7 +24,7 @@ class OpenPoseKeyPointExtractor:
                 "select_parts": (openpose_parts, { "default": openpose_parts[0]}),
                 "points_list": ("STRING", {"multiline": True, "default": "0, 1"}),
                 "round_by": (round_divs, { "default": round_divs[0] }),
-                "dilate": ("INT", { "min": 0, "max": 128 }, { "default": 0 }),
+                "dilate": ("INT", { "min": 0, "max": 128, "default": 0}),
                 "person_number": ("INT", { "default": 0 }),
             }
         }
@@ -114,11 +114,11 @@ class OpenPoseSEGSExtractor(OpenPoseKeyPointExtractor):
             "required": {
                 "image": ("IMAGE", ),
                 "pose_keypoint": ("POSE_KEYPOINT",),
-                "select_parts": (openpose_parts, { "default": openpose_parts[0]}),
+                "select_parts": (openpose_parts, { "default": "pose_keypoints_2d"}),
                 "points_list": ("STRING", {"multiline": True, "default": "0, 1"}),
-                "round_by": (round_divs, { "default": round_divs[0] }),
-                "dilate_bbox": ("INT", { "min": 0, "max": 128 }, { "default": 0 }),
-                "dilate_crop": ("INT", { "min": 0, "max": 128 }, { "default": 0 }),
+                "round_by": (round_divs, { "default": 1 }),
+                "dilate_bbox": ("INT", { "min": 0, "max": 128, "default": 0}),
+                "dilate_crop": ("INT", { "min": 0, "max": 128, "default": 0}),
                 "person_number": ("INT", { "default": 0 }),
             }
         }
@@ -174,10 +174,10 @@ class OpenPoseJsonLoader:
                 "points_list": ("STRING", {"multiline": True, "default": body_points}),
             },
             "optional": {
-                "JSON": ("JSON", {"default": None, "forceInput": True}),
-                "POSE_KEYPOINT": ("POSE_KEYPOINT", {"default": None, "forceInput": True}),
-                "width": ("INT", {"default": None, "forceInput": True}),
-                "height": ("INT", {"default": None, "forceInput": True}),
+                "JSON": ("JSON", {"forceInput": True}),
+                "POSE_KEYPOINT": ("POSE_KEYPOINT", {"forceInput": True}),
+                "width": ("INT", {"forceInput": True}),
+                "height": ("INT", {"forceInput": True}),
             }
         }
 
