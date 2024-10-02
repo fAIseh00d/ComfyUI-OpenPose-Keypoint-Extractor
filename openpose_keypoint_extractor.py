@@ -234,28 +234,37 @@ class OpenPoseJsonLoader:
         from .open_pose import draw_poses
         points_we_want = [int(element) for element in points_list.split(",")]
 
+        image = []
+        pose_kps = []
+        
         if JSON:
             pose_json = json.loads(JSON)
-            pose_json = pose_json['extra'].strip('\n[]').replace("'", '"') #For crystools embedded JSON from file
+            pose_json = pose_json['extra'].strip('\n').replace("'", '"') #For crystools embedded JSON from file
             pose_json = json.loads(pose_json)
         elif POSE_KEYPOINT: 
-            pose_json = POSE_KEYPOINT[0]
+            pose_json = POSE_KEYPOINT
         else:
             with open(pose_json_file, "r") as f:
-                pose_json = json.loads(f.read().strip('\n[]').replace("'", '"'))
+                pose_json = json.load(f)
 
-        if width is None and height is None:
-            width = pose_json['canvas_width']
-            height = pose_json['canvas_height']
+        for pose_idx in pose_json:
+            if width is None and height is None:
+                width = pose_idx['canvas_width']
+                height = pose_idx['canvas_height']
 
-        poses = [self.json_convertor(pose_json, points_we_want)]
+            poses = [self.json_convertor(pose_idx, points_we_want)]
 
-        canvas = draw_poses(poses, height, width, draw_body=True, draw_hand=False, draw_face=False) 
-        canvas = torch.from_numpy(canvas.astype(np.float32)/255.0)[None,]
-        
-        pose_json = self.scale_pose(pose_json, width, height)
-        
-        return canvas, [pose_json]
+            canvas = draw_poses(poses, height, width, draw_body=True, draw_hand=False, draw_face=False) 
+            canvas = torch.from_numpy(canvas.astype(np.float32)/255.0)[None,]
+            
+            pose_idx = self.scale_pose(pose_idx, width, height)
+            
+            image.append(canvas)
+            pose_kps.append(pose_idx)
+            
+        image = torch.cat(image, dim=0)
+
+        return (image, pose_kps,)
 
 NODE_CLASS_MAPPINGS = {
     "Openpose Keypoint Extractor": OpenPoseKeyPointExtractor,
