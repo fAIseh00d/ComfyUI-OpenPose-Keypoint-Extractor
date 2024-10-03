@@ -55,57 +55,68 @@ class OpenPoseKeyPointExtractor:
         return [list[idx_x], list[idx_y], list[idx_conf]]
 
     def box_keypoints(self, pose_keypoint, select_parts, points_list, round_by, dilate, person_number):
-        pose_keypoint = pose_keypoint[0]
+        min_x_out, min_y_out, max_x_out, max_y_out, width_out, height_out, mask_out = [[] for _ in range(7)]
         
-        canvas_width = int(pose_keypoint["canvas_width"])
-        canvas_height = int(pose_keypoint["canvas_height"])
-
         points_we_want = [int(element) for element in points_list.split(",")]
+        
+        for pose_kps in pose_keypoint:
+            canvas_width = int(pose_kps["canvas_width"])
+            canvas_height = int(pose_kps["canvas_height"])
 
-        min_x = MAX_RESOLUTION
-        min_y = MAX_RESOLUTION
-        max_x = 0
-        max_y = 0
+            min_x = MAX_RESOLUTION
+            min_y = MAX_RESOLUTION
+            max_x = 0
+            max_y = 0
+            
+            iter : int = 0
+            sum_coord = 0.0
+            
+            for element in points_we_want:
+                (x,y,_) = self.get_keypoint_from_list(pose_kps["people"][person_number][select_parts], element)
+                if (x > 0.0 and y > 0.0):
+                    iter+= 1
+                    sum_coord+=x+y
+                    
+                    min_x = min(min_x, x)
+                    min_y = min(min_y, y)
+                    max_x = max(max_x, x)
+                    max_y = max(max_y, y)
+            
+            mean_coord = sum_coord/(2*iter)
+            
+            if mean_coord < 1.0:
+                min_x*=canvas_width
+                min_y*=canvas_height
+                max_x*=canvas_width
+                max_y*=canvas_height
+            
+            min_x, min_y, max_x, max_y = self.round_resolution(
+                min_x - dilate,
+                min_y - dilate,
+                max_x + dilate,
+                max_y + dilate,
+                canvas_width,
+                canvas_height,
+                round_by,
+            )
+            
+            width : int = max_x - min_x
+            height : int = max_y - min_y
+            
+            mask = torch.zeros(1, canvas_height, canvas_width)
+            mask[:, min_y:max_y, min_x:max_x] = 1.0
+            
+            min_x_out.append(min_x)
+            min_y_out.append(min_y)
+            max_x_out.append(max_x)
+            max_y_out.append(max_y)
+            width_out.append(width)
+            height_out.append(height)
+            mask_out.append(mask)
         
-        iter : int = 0
-        sum_coord = 0.0
+        mask_out = torch.cat(mask_out, dim=0)
         
-        for element in points_we_want:
-            (x,y,_) = self.get_keypoint_from_list(pose_keypoint["people"][person_number][select_parts], element)
-            if (x > 0.0 and y > 0.0):
-                iter+= 1
-                sum_coord+=x+y
-                
-                min_x = min(min_x, x)
-                min_y = min(min_y, y)
-                max_x = max(max_x, x)
-                max_y = max(max_y, y)
-        
-        mean_coord = sum_coord/(2*iter)
-        
-        if mean_coord < 1.0:
-            min_x*=canvas_width
-            min_y*=canvas_height
-            max_x*=canvas_width
-            max_y*=canvas_height
-        
-        min_x, min_y, max_x, max_y = self.round_resolution(
-            min_x - dilate,
-            min_y - dilate,
-            max_x + dilate,
-            max_y + dilate,
-            canvas_width,
-            canvas_height,
-            round_by,
-        )
-        
-        width : int = max_x - min_x
-        height : int = max_y - min_y
-        
-        mask = torch.zeros(1, canvas_height, canvas_width)
-        mask[:, min_y:max_y, min_x:max_x] = 1.0
-        
-        return (min_x, min_y, max_x, max_y, width, height, mask,)
+        return (min_x_out, min_y_out, max_x_out, max_y_out, width_out, height_out, mask_out,)
     
 class OpenPoseSEGSExtractor(OpenPoseKeyPointExtractor):
     @classmethod
@@ -181,7 +192,8 @@ class OpenPoseJsonLoader:
             }
         }
 
-    RETURN_TYPES = ("IMAGE", "POSE_KEYPOINT", )
+    RETURN_TYPES = ("IMAGE", "POSE_KEYPOINT", "INT", "INT",)
+    RETURN_NAMES = ("image", "pose_keypoint", "width", "height")
     FUNCTION = "main"
     CATEGORY = "utils"
     
@@ -264,7 +276,7 @@ class OpenPoseJsonLoader:
             
         image = torch.cat(image, dim=0)
 
-        return (image, pose_kps,)
+        return (image, pose_kps, width, height)
 
 NODE_CLASS_MAPPINGS = {
     "Openpose Keypoint Extractor": OpenPoseKeyPointExtractor,
