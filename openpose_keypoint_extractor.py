@@ -136,44 +136,52 @@ class OpenPoseSEGSExtractor(OpenPoseKeyPointExtractor):
 
     RETURN_TYPES = ("SEGS",)
     RETURN_NAMES = ("segs",)
+    OUTPUT_IS_LIST = (True, )
     FUNCTION = "extract_SEGS"
     CATEGORY = "utils"
     
     def extract_SEGS(self, image, pose_keypoint, select_parts, points_list, round_by, dilate_bbox, dilate_crop, person_number):
+        segs = []
         
-        image_width = image.shape[2]
-        image_height = image.shape[1]
-        confidence=array(1.0, dtype=float32)
-        control_net_wrapper=None
-        label="openpose"
-        
-        kps = self.box_keypoints(pose_keypoint, select_parts, points_list, 1, dilate_bbox, person_number)
-        bbox_region = list(kps[:4])
-        crop_region = self.round_resolution(
-            bbox_region[0] - dilate_crop,
-            bbox_region[1] - dilate_crop,
-            bbox_region[2] + dilate_crop,
-            bbox_region[3] + dilate_crop,
-            image_width,
-            image_height,
-            round_by,
-        )
-        
-        crop_l, crop_t, crop_r, crop_b = crop_region[:4]
-        left, top, right, bottom = bbox_region
-        
-        mask = kps[-1]
-        mask[:, top:bottom, left:right] = 1.0
-        
-        cropped_image = image[:,crop_t:crop_b, crop_l:crop_r]
-        cropped_mask = mask[:,crop_t:crop_b, crop_l:crop_r].squeeze(0).numpy()
-        
-        segs_header=(image_height, image_width)
-        segs_elt = SEG(cropped_image, cropped_mask, confidence, crop_region, bbox_region, label, control_net_wrapper)
-        
-        seg=(segs_header, [segs_elt])
+        for img, pose_kps in zip(image, pose_keypoint):
+            img = img.unsqueeze(0)
+            pose_kps = [pose_kps]
+            
+            image_width = img.shape[2]
+            image_height = img.shape[1]
+            confidence=array(1.0, dtype=float32)
+            control_net_wrapper=None
+            label="openpose"
+            
+            kps = self.box_keypoints(pose_kps, select_parts, points_list, 1, dilate_bbox, person_number)
+            bbox_region = [x[0] for x in kps[:4]]
+            crop_region = self.round_resolution(
+                bbox_region[0] - dilate_crop,
+                bbox_region[1] - dilate_crop,
+                bbox_region[2] + dilate_crop,
+                bbox_region[3] + dilate_crop,
+                image_width,
+                image_height,
+                round_by,
+            )
+            
+            crop_l, crop_t, crop_r, crop_b = crop_region[:4]
+            left, top, right, bottom = bbox_region
+            
+            mask = kps[-1]
+            mask[:, top:bottom, left:right] = 1.0
+            
+            cropped_image = img[:,crop_t:crop_b, crop_l:crop_r]
+            cropped_mask = mask[:,crop_t:crop_b, crop_l:crop_r].squeeze(0).numpy()
+            
+            segs_header=(image_height, image_width)
+            segs_elt = SEG(cropped_image, cropped_mask, confidence, crop_region, bbox_region, label, control_net_wrapper)
+            
+            seg=(segs_header, [segs_elt])
+            
+            segs.append(seg)
 
-        return (seg,)
+        return (segs,)
 
 class OpenPoseJsonLoader:
 
